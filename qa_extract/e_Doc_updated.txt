@@ -1,0 +1,350 @@
+from django.shortcuts import render
+from langchain.embeddings import HuggingFaceEmbeddings
+from llama_index.embeddings.langchain import LangchainEmbedding
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core import ChatPromptTemplate
+from llama_index.core.llms import ChatMessage,MessageRole
+from django.conf import settings
+from llama_index.llms.together import TogetherLLM
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+import qdrant_client
+from llama_index.vector_stores.qdrant import QdrantVectorStore
+import re
+import os
+from django.http import FileResponse, Http404
+from django.http import HttpResponseServerError
+from llama_index.core import StorageContext
+from llama_index.core.postprocessor import SentenceTransformerRerank
+# from llama_index.core.schema import MetadataMode
+from llama_index.core.extractors import ( TitleExtractor,QuestionsAnsweredExtractor)
+# from llama_index.extractors.entity import EntityExtractor
+from llama_index.core.node_parser import TokenTextSplitter
+
+from llama_index.core.ingestion import IngestionPipeline
+from copy import deepcopy
+from docx import Document
+
+
+# Create your views here.
+title_questions_dict = {}
+chat_text_qa_msgs = [
+                        ChatMessage(
+                            role=MessageRole.SYSTEM,
+                            content=(
+                                 """You are an e-government online assistant chatbot system specifically developed for e-Governance Policy Initiatives under Digital India. 
+            Your goal is to answer questions as accurately as possible based on the instructions and context provided."""
+            " If the question is not related to the uploaded document, respond with 'I can only answer questions related to e-Governance Policy Initiatives under Digital India.'"
+            " For general questions like 'Hi', 'How are you?', or 'Who are you?', respond accordingly, mentioning that you're here to assist with e-government policy using the context provided in the document and how you can help the user."
+            " Given the context information and not prior knowledge."
+            " Make sure to look for headings, subheadings, and key terms that match the question context."
+                             
+                            ),
+                        ),
+                        ChatMessage(
+                            role=MessageRole.USER,
+                            content=(
+                                "Context information is below.\n"
+                                "---------------------\n"
+                                "{context_str}\n"
+                                "---------------------\n"
+                                "Given the context information and not prior knowledge, "
+                                
+                                "answer the question: {query_str} provided in bullet points or numbered list where appropriate.\n"
+                                
+                                
+
+                               
+                            ),
+                        ),
+                    ]
+text_qa_template = ChatPromptTemplate(chat_text_qa_msgs)
+
+rerank = SentenceTransformerRerank( model="cross-encoder/ms-marco-MiniLM-L-2-v2", top_n=7)
+def build_document_summary_index(documents):
+    # Initialize the embedding model
+    embed_model = LangchainEmbedding(HuggingFaceEmbeddings(model_name=settings.SENTENCE_EMBEDDING_MODEL))
+    settings.embed_model = embed_model
+
+    # Initialize the LLM model
+    llm_e_chat = TogetherLLM(model=settings.LLM_MODEL, api_key=settings.LLM_API_KEY_CHAT)
+    # print("llm_e_chat",llm_e_chat)
+    settings.llm = llm_e_chat
+
+    # Set context window size
+    settings.context_window = settings.CONTEXT_WINDOW_SIZE
+    text_splitter = TokenTextSplitter(
+    separator=" ", chunk_size=1000, chunk_overlap=64
+    )
+    title_extractor = TitleExtractor(nodes=20)
+    qa_extractor = QuestionsAnsweredExtractor(questions=3)
+    
+
+
+
+    pipeline = IngestionPipeline(
+    transformations=[text_splitter, title_extractor,qa_extractor])
+
+    nodes = pipeline.run(
+    documents=documents,
+    in_place=True,
+    show_progress=True,)
+    client = qdrant_client.QdrantClient(path="qdrant_edoc_new")
+
+    # Create a local Qdrant vector store
+    vector_store = QdrantVectorStore(
+        client=client, collection_name="text_collection")
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    nodes_no_metadata = deepcopy(nodes)
+    # for node in nodes_no_metadata:
+    #  node.metadata = {
+    #     k: node.metadata[k]
+    #     for k in node.metadata
+    #     if k in ["page_label", "file_name"]
+    # }
+    index= VectorStoreIndex(nodes=nodes_no_metadata,storage_context=storage_context)
+
+    # Create your index
+    # index = VectorStoreIndex.from_documents(
+    #      storage_context=storage_context,documents=documents,nodes=nodes_no_metadata)
+
+    return index,nodes
+
+
+
+
+def formatted_answer(answer):
+    lines = answer.split('\n')
+    formatted_lines = []
+    in_list = False
+    list_type = None
+
+    for line in lines:
+        # Check for numbered list
+        numbered_match = re.match(r'^(\d+\.\s)(.+)', line)
+        # Check for asterisk list
+        asterisk_match = re.match(r'^(\*\s)(.+)', line)
+        # Split asterisk list items that are on the same line
+        asterisk_items = re.findall(r'\*\s(.+?)(?=(\*\s|$))', line)
+
+        if numbered_match:
+            if not in_list or list_type != 'ol':
+                if in_list:  # Close the previous list
+                    formatted_lines.append('</ul>' if list_type == 'ul' else '</ol>')
+                formatted_lines.append('<ol>')
+                in_list = True
+                list_type = 'ol'
+            formatted_lines.append(f'<li>{numbered_match.group(2).strip()}</li>')
+
+        elif asterisk_match or asterisk_items:
+            if not in_list or list_type != 'ul':
+                if in_list:  # Close the previous list
+                    formatted_lines.append('</ol>' if list_type == 'ol' else '</ul>')
+                formatted_lines.append('<ul>')
+                in_list = True
+                list_type = 'ul'
+            if asterisk_items:
+                for item, _ in asterisk_items:
+                    formatted_lines.append(f'<li>{item.strip()}</li>')
+            else:
+                formatted_lines.append(f'<li>{asterisk_match.group(2).strip()}</li>')
+
+        else:
+            if in_list:  # Close the previous list
+                formatted_lines.append('</ul>' if list_type == 'ul' else '</ol>')
+                in_list = False
+            # Wrap non-list lines in paragraphs or handle them appropriately
+            formatted_lines.append(f'<p>{line.strip()}</p>')
+
+    # Close any open list tags
+    if in_list:
+        formatted_lines.append('</ul>' if list_type == 'ul' else '</ol>')
+
+    # Combine all formatted lines
+    formatted_output = ''.join(formatted_lines)
+
+    return formatted_output
+
+query_history=[]
+index_edoc = None
+
+
+documents = SimpleDirectoryReader("./e_document").load_data()
+index_edoc,nodes = build_document_summary_index(documents)
+
+def e_doc(request):
+    global index_edoc
+
+    global query_history
+
+    if request.method == 'POST':
+        if request.POST.get('user_input'):
+            # Handle user input
+            user_input = request.POST.get('user_input', '')
+            print(user_input)
+
+            if user_input:
+                print(user_input,"entered the if condition")
+                try:
+                    
+                    query_2 = f"""{user_input}."""""
+                    # query_engine = RetrieverQueryEngine(
+                    #     retriever=retriever,
+                    #     response_synthesizer=response_synthesizer
+                    # )
+                    print(index_edoc)
+                    # response__2 = index_edoc.as_query_engine(text_qa_template=text_qa_template).query(query_2)
+                    query_engine = index_edoc.as_query_engine(similarity_top_k=2, node_postprocessors=[rerank],
+                                                          text_qa_template=text_qa_template)
+                    response__2 = query_engine.query(query_2)
+
+                    print("response__2",response__2)
+                    answer = formatted_answer(str(response__2))
+                    query_history.append({"question": user_input, "answer": answer})
+                    return render(request, 'e_gov_chat.html', {'query_history': query_history})
+
+
+                except AttributeError:
+                    # Handle the case when doc_summary_index is None
+                    return HttpResponseServerError("reload the page.")
+        # Render a response for the GET request
+    return render(request, 'e_gov_chat.html')
+def e_chat(request):
+    # return render(request, 'doc_chat.html')
+
+    return render(request, 'e_gov_chat.html')
+
+
+
+
+def extract_questions_and_summary(nodes):
+    title_questions_dict = {}
+
+    for node in nodes:
+        title = node.metadata.get('document_title', '').strip()
+        summary = node.metadata.get('summary', '').strip()
+        questions = node.metadata.get('questions_this_excerpt_can_answer', '').strip()
+
+        # Check if the title starts with "e-kranti" or comes after it alphabetically
+        if title.lower() >= 'e-kranti':
+            # Extract questions from the formatted string
+            if questions:
+                extracted_questions = [line.strip() for line in questions.split('\n') if line.strip().startswith('1.') or line.strip().startswith('2.') or line.strip().startswith('3.')]
+
+                # Add the extracted questions to the title_questions_dict
+                if title not in title_questions_dict:
+                    title_questions_dict[title] = {'questions': [], 'summary': summary}
+
+                title_questions_dict[title]['questions'].extend(extracted_questions)
+
+    return title_questions_dict
+
+# Call the function and save the resulting dictionary in a new variable
+dict1 = extract_questions_and_summary(nodes)
+
+
+
+
+
+
+
+
+
+
+def ask_questions_and_save_to_single_file(dict1, output_folder="faq", output_file="faq_edoc.docx"):
+    # Create the output folder if it doesn't exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Check if the output file already exists
+    output_path = os.path.join(output_folder, output_file)
+    if os.path.exists(output_path):
+        # Open the existing document to append new content
+        doc = Document(output_path)
+    else:
+        # Create a new Document
+        doc = Document()
+
+    # Iterate through the title_questions_dict
+    for full_title, data in dict1.items():
+        # Extract the title and summary
+        if '\n' in full_title:
+            title, summary = full_title.split('\n', 1)
+        else:
+            title = full_title
+            summary = ""
+
+        # Write the title
+        doc.add_heading(title.strip(), level=1)
+
+        # Write the summary
+        if summary.strip():
+            doc.add_heading('Summary', level=2)
+            doc.add_paragraph(summary.strip())
+
+        # Write the FAQ section
+        if data['questions']:
+            doc.add_heading('FAQ', level=2)
+
+            for question in data['questions']:
+                # Query the index for the answer
+                response = index_edoc.as_query_engine(text_qa_template=text_qa_template, similarity_top_k=3, node_postprocessors=[rerank]).query(question)
+
+                # Extract the text from the response object and remove initial content
+                response_text = str(response).split('Answer:', 1)[-1].strip()
+
+                # Remove unwanted phrases from the response
+                unwanted_phrases = ['sure', 'I am happy to help you', 'sure i will help you']
+                for phrase in unwanted_phrases:
+                    response_text = response_text.replace(phrase, '')
+
+                # Write the question and filtered response to the document
+                doc.add_heading('Question:', level=3)
+                doc.add_paragraph(question, style='List Bullet')
+
+                doc.add_heading('Answer:', level=3)
+                doc.add_paragraph(response_text)
+
+                # print(f"Processed question for title '{title}': {question}")
+
+            doc.add_paragraph()  # Add space between sections
+            doc.add_page_break()  # Add page break between titles
+
+    # Save the document
+    doc.save(output_path)
+    print(f"Results saved in file: {output_path}")
+ask_questions_and_save_to_single_file(dict1)
+
+ # Define the path to the file you want to serve
+def download_file(request):
+    file_path = os.path.join(settings.BASE_DIR, './faq/faq_doc.docx')
+
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        raise Http404("File does not exist")
+
+    # Open the file for reading content
+    file_handle = open(file_path, 'rb')
+
+    # Create the response object with the appropriate content type
+    response = FileResponse(file_handle, content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    response['Content-Disposition'] = 'attachment; filename="faq_doc.docx"'
+
+    return response
+
+# def download_file(request):
+#     folder_path = os.path.join(settings.BASE_DIR, 'faq')
+#     file_name = f'aq_edoc.docx'
+#     file_path = os.path.join(folder_path, file_name)
+
+#     # Check if the file exists
+#     if not os.path.exists(file_path):
+#         raise Http404("File does not exist")
+
+#     # Open the file for reading content
+#     file_handle = open(file_path, 'rb')
+
+#     # Create the response object with the appropriate content type
+#     response = FileResponse(file_handle, content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+#     response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+
+#     return response
