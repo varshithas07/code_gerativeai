@@ -1,0 +1,103 @@
+User Adoption Execution Steps
+User adoption is used to check how many users have used the sales Genie Dashboard in the last one week. This dashboard is updated every Friday in QA, below are the following steps to refresh this Dashboard: -
+First take backups for all the 3 dashboards from Tableau 
+Dashboards:
+For taking backup of dashboard use below link:
+https://tableau-qa.medtronic.com/#/site/APACBI
+ANZ/SGMY/TH: Sales Genie-> Sales Genie user analytics
+KR/JP: Sales Genie-> Sales Genie user analytics(JP_KR)
+NPI: NPI_Genie-> NPI Genie User Anlaytics
+We need to connect to test database in sql.
+Take backups for all table from database
+For ANZ/SGMY/TH use below two queries to take a backup 
+Select * into ALL_SALES_GENIE_USERS_11_Jan_2024_BKP from [FIGO_SALES].[ALL_SALES_GENIE_USERS] ;  
+Select * into dbo.APAC_USAGE_HIST_SNAPSHOT_ALL_QTR _11_Jan_2024_BKP  from dbo.APAC_USAGE_HIST_SNAPSHOT_ALL_QTR;
+KR/JP use below two queries to take a backup
+Select * into ALL_SALES_GENIE_USERS_11_Jan_2024_BKP from [FIGO_SALES].[ALL_SALES_GENIE_USERS] ;
+Select * korea_japan_usage_11_Jan_2024_BKP  from  FIGO_SALES.korea_japan_usage;
+NPI: FIGO_SALES.NPI_GENIE_usage
+
+Use the below link to download the data in excel for all 6 regions
+https://tableau.medtronic.com/#/views/TableauUsageDetails_16226544435390/TraffictoViews?:iid=1
+   After downloading, open the excel sheet. In that, delete the first column and before  Column  ‘K’ add two colums(Country & function) in each region.
+ANZ/TH/SGMY/KR/JP 
+
+
+
+
+
+
+NPI 	
+There is column (Name hist view) need to remove 1 or 2 next to the QARA Dashboard
+
+
+Change column N in excel Action by Action2 in all regions 
+We need to check for the data created at local date and time by using below query:
+select * from dbo.APAC_USAGE_HIST_SNAPSHOT_ALL_QTR where Country='ANZ'  
+ order by  convert(datetime,created_at_local) desc  
+Note : select Country as per the region.
+For reference below screenshot is attached 
+
+
+After checking for data created at local date and time then in excel sheet we need to filter the data according to created_at_local in sql.
+
+
+
+Then we need to take a filtered data in excel and copy that data in new excel sheet and save it. 
+After preparing the excel sheets for all regions open the remote desktop connection Go to à SSMS àCopy all excels and paste in Bang Account remote desktop. Go to SSMS à Connect to Test Environment.
+Select Database ( APACBI_FIGO_SALES)  à Right click àSelect Task  à Import data
+
+By clicking on import data, choose a data source window will appear as shown below.
+Select Data source as Micro soft excel àBrowse your excel sheet (single sheet at a time) àclick Next
+
+By clicking Next Choose a Destination Window will appear as shown below.
+Select data base (SQL Server Native client 11.0)  à Check for server name it should be Test Environment àClick Next
+
+
+By Clicking Next Source Tables and Views Window will appear as shown below
+à Select destination as per region () 
+Japan / Korea:–[FIGO_SALES][korea_japan_usage]
+ANZ /TH/SGMY:-dbo.APAC_USAGE_HIST_SNAPSHOT_ALL_QTR
+NPI :–[FIGO_SALES][NPI_GENIE_Usage
+
+
+By Clicking Next  à Column Mappings Window will appear as shown below. Here we need to check whether all the columns are mapped correctly  à click Ok.
+
+By Clicking Ok à  The window will appear as shown below.  This window will give the details of success rows.
+
+Now data is fully loaded
+1) Check the users with NULL Comex IT Flag 
+select distinct SYSTEM_USERS_NAME, [Flag], Country from [APACBI_FGO_SALES].FIGO_SALES.Sales_Genie_User_Analytics where Flag is null and  Country = ‘Japan’;
+Note : select Country as per the region.
+ 2) Get the user details  as per the FIGO_SALES.ALL_SALES_GENIE_USERS format.
+ 2.1 Username & user id with below query.
+select distinct  a.username, a.SALES_REP_NM from FIGO_SALES.APAC_SALES_STRUCTURES a
+join  FIGO_SALES.Sales_Genie_User_Analytics b on a.USERNAME = b.SYSTEM_USERS_NAME
+where a.USERNAME in (‘abadim3’)
+ 2.2 Fill in below columns as desired
+
+
+
+
+
+Sent to respective market stakeholder and get the Comex IT flag updated and load the data to 
+FIGO_SALES.ALL_SALES_GENIE_USERS table
+ Step : Run below Stored Procedures
+ANZ/SGMY/TH: dbo.APAC_Usage_Sales_Genie
+KR/JP: dbo.APAC_Usage_Sales_Genie_k
+ NPI:dbo.APAC_Usage_NPI_Genie
+
+Step : Refresh below Dashboards
+ANZ/SGMY/TH: Sales_Genie-> Sales Genie user analytics
+KR/JP: Sales_Genie-> Sales Genie user analytics(JP_KR)
+NPI: NPI_Genie-> NPI Genie User Anlaytics
+The user adoption dashboard is in QA server.
+NPI User Adoption
+https://tableau-qa.medtronic.com/#/site/APACBI/workbooks/3624/views
+Japan/Korea Genie User Adoption
+https://tableau-qa.medtronic.com/#/site/APACBI/workbooks/3877/views
+Other Genie User Adoption
+https://tableau-qa.medtronic.com/#/site/APACBI/workbooks/3837/views
+
+
+
