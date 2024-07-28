@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://hrtest499li.azurewebsites.net/static/style.css">
+    <title>Athena Chat</title>
+    <style>
+        .nav-design .nav-link {
+            color: #fff; /* Set text color to white */
+        }
+
+        .nav-design .nav-link.active {
+            font-weight: bold; /* Highlight the active link */
+            color: black; /* Set text color for the active link to yellow */
+            background-color: #ffffff;
+            border-radius: 10px;
+        }
+        #drop_zone {
+          border: 2px dashed #ccc;
+          border-radius: 5px;
+          padding: 100px;
+          min-height:250px;
+          text-align: center;
+          color: #ccc;
+          background: linear-gradient(to bottom, #12507f, black);
+          font-size: 20px;
+          width: 500px; /* Adjust the width as needed */
+          margin-top: 206px;
+          margin-left: 250px;
+        }
+
+        #drop_zone.hover {
+          border-color: #333;
+          color: #333;
+        }
+
+        .prompt-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: white; /* Changed background color to white */
+            color: black; /* Changed text color to black */
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 9999;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid p-0">
+    <div class="d-xl-flex d-lg-flex d-md-flex d-sm-flex d-xs-block">
+        <div class="col bg-color-1 p-0 left-nav">
+            <div class="logo d-flex justify-content-center align-items-center">
+                <img class="img-fluid w-auto" src="https://hrtest499li.azurewebsites.net/static/images/logo.png" alt="">
+            </div>
+            <div class="navbar-expand-lg navbar-expand-md">
+                <div class="offcanvas offcanvas-start mobile-slide bg-color-1 " tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+                    <nav class="nav flex-column nav-design">
+                        <div class="nav-link" data-bs-toggle="pill">Home</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Acquisition</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Development</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Performances</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Metrics</div>
+                        <div class="nav-link" data-bs-toggle="pill">HR Analytics</div>
+                        <div class="nav-link active" data-bs-toggle="pill">Athena Chat</div>
+                        <div class="nav-link" data-bs-toggle="pill">Contact Us</div>
+                    </nav>
+                </div>
+            </div>
+        </div>
+        <div class="col bg-img chatbot-section p-0">
+            <div class="col Athena-space d-flex align-items-center">Athena Chat</div>
+            <div id="drop_zone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)">
+                <p style="margin-top:64px">Drop files here or</p>
+                <form id="upload" style="display: inline;" enctype="multipart/form-data" action="/process_file/" method="post">
+                    {% csrf_token %}
+                    <label for="file_input">choose file</label>
+                    <input type="file" id="file_input" name="pdf_file" style="display: none;" onchange="submitForm()">
+                </form>
+            </div>
+            <div class="prompt-message" id="uploadMessage">Document uploaded successfully! </div>
+        </div>
+    </div>
+</div>
+<script>
+    var dropZone = document.getElementById('drop_zone');
+    var uploadMessage = document.getElementById('uploadMessage');
+
+    dropZone.addEventListener('dragenter', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        this.classList.add('hover');
+    });
+
+    dropZone.addEventListener('dragover', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    });
+
+    dropZone.addEventListener('dragleave', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        this.classList.remove('hover');
+    });
+
+    function submitForm() {
+        document.getElementById("upload").submit();
+        uploadMessage.style.display = 'block';
+        setTimeout(function() {
+            uploadMessage.style.display = 'none';
+        }, 3000); // Hide after 3 seconds
+    }
+</script>
+</body>
+</html>

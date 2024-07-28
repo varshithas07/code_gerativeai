@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'css/style2.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://hrtest499li.azurewebsites.net/static/style.css">
+
+    <title>Document Chat</title>
+    <style>
+          .tooltip {
+        position: absolute;
+        background-color: rgba(0, 0, 0, 0.7);
+        color:yellow;
+        padding: 10px 20px; /* Increase padding for larger box size */
+        border-radius: 5px;
+        font-size: 20px; /* Increase font size */
+        z-index: 999;
+        display: none;
+    }
+        .nav-design .nav-link {
+            color: #fff; /* Set text color to white */
+        }
+
+        .nav-design .nav-link.active {
+            font-weight: bold; /* Highlight the active link */
+            color: black; /* Set text color for the active link to yellow */
+            background-color: #ffffff;
+            border-radius: 10px;
+        }
+
+        #drop_zone {
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            padding: 100px;
+            min-height: 250px;
+            text-align: center;
+            color: #ccc;
+            background: linear-gradient(to bottom, #12507f, black);
+            font-size: 20px;
+            width: 500px; /* Adjust the width as needed */
+            margin-top: 206px;
+            margin-left: 250px;
+        }
+
+        #drop_zone.hover {
+            border-color: #333;
+            color: #333;
+        }
+
+        #query-history-container {
+            max-height: 600px;
+            margin-right: 240px;
+            overflow-y: auto; /* Enable vertical scrolling */
+        }
+
+
+
+#user-input {
+    flex-grow: 1;
+      width: calc(100% - 155px);
+    box-sizing: border-box;
+    overflow-y: auto;
+    background-color: var(--color-white);
+    resize: none;
+    border: none;
+    outline: none;
+    vertical-align: middle;
+    height: 44px;
+    margin-right: 10px; /* Adjust the right margin */
+}
+
+#arrow-button {
+    position: absolute;
+
+    bottom: 10px; /* Adjust the distance from the bottom */
+    right: 10px; /* Adjust the right position */
+}
+.add-new-file-button {
+    position: fixed;
+    top: 20px; /* Adjust the distance from the top */
+    left: 70px; /* Adjust the distance from the left */
+    z-index: 999; /* Ensure it appears on top of other elements */
+}
+
+
+
+    </style>
+</head>
+<body>
+   <div class="container-fluid p-0">
+    <div class="d-xl-flex d-lg-flex d-md-flex d-sm-flex d-xs-block">
+        <div class="col bg-color-1 p-0 left-nav">
+            <div class="logo d-flex justify-content-center align-items-center">
+                <img class="img-fluid w-auto" src="https://hrtest499li.azurewebsites.net/static/images/logo.png" alt="">
+            </div>
+            <div class="navbar-expand-lg navbar-expand-md">
+                <div class="offcanvas offcanvas-start mobile-slide bg-color-1 " tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel" style="text">
+                    <nav class="nav flex-column nav-design">
+                        <div class="nav-link" data-bs-toggle="pill">Home</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Acquisition</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Development</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Performances</div>
+                        <div class="nav-link" data-bs-toggle="pill">Talent Metrics</div>
+                        <div class="nav-link active" data-bs-toggle="pill" id="documentSummarisation" data-bs-toggle="tooltip" title="The document summary index will extract a summary from each document and store that summary, as well as all nodes corresponding to the document. Retrieval can be performed through the LLM or embeddings">Document summarisation</div>
+<!--                          <div class="nav-link active" data-tooltip="Tooltip for Document Summarization"-->
+<!--                             id="documentSummarisation">Document summarisation-->
+<!--                        </div>-->
+                        <div class="nav-link" data-bs-toggle="pill">Athena Chat</div>
+                        <div class="nav-link" data-bs-toggle="pill">Contact Us</div>
+                    </nav>
+                </div>
+            </div>
+        </div>
+        <div class="col bg-img chatbot-section p-0">
+            <div class="col Athena-space d-flex align-items-center">
+                Document summarisation
+            </div>
+            <div class="main-chat-section">
+                <div id="query-history-container">
+                    <!-- Display recent question-answer pairs last -->
+                    {% for entry in query_history %}
+                        <div class="chat-cards m-auto">
+                            <div class="ques"><p>User: {{ entry.question }}</p></div>
+                            <div class="ans">
+                                <p>{{ entry.answer | safe }}</p>
+                            </div>
+                        </div>
+
+                        {% if entry.answer_contains_list %}
+                            <!-- If the answer contains a list, display it as an unordered list -->
+                            <div class="ans-list" style="margin-left: 20px;">
+                                <p>Chatbot's List Response:</p>
+                                {{ entry.answer | safe }}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="add-new-file-button">
+                <button class="btn btn-primary button_file" id="add-new-file-btn" style ="margin-left: 900px; background: #30494c; border-color: black;">Replace File</button>
+            </div>
+            <div class="m-auto" id="user-input-container" style="position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);">
+                <form id="file-upload-form" action="{% url 'process_file' %}" method="post">
+                    {% csrf_token %}
+                    <textarea id="user-input" name="user_input" placeholder="Type your message..."></textarea>
+                    <button id="arrow-button" type="submit"><i class="fa fa-arrow-up" aria-hidden="true"></i></button>
+                </form>
+            </div>
+        </div>
+    </div>
+   </div>
+
+   <div class="tooltip" id="tooltip"></div>
+
+   <script>
+      // Add tooltips to navigation links
+    var tooltips = document.querySelectorAll('.nav-link');
+    tooltips.forEach(function (tooltip) {
+        tooltip.addEventListener('mouseover', function () {
+            var tooltipText = this.getAttribute('data-tooltip');
+            var tooltipElement = document.getElementById('tooltip');
+            tooltipElement.innerHTML = tooltipText;
+            tooltipElement.style.display = 'block';
+            // Position tooltip relative to the hovered element
+            var rect = this.getBoundingClientRect();
+            tooltipElement.style.top = (rect.bottom + 10) + 'px'; // Adjust the position
+            tooltipElement.style.left = rect.left + 'px';
+        });
+        tooltip.addEventListener('mouseout', function () {
+            document.getElementById('tooltip').style.display = 'none';
+        });
+    });
+       document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("add-new-file-btn").addEventListener("click", function () {
+            // Redirect to doc.html
+            window.location.href = "{% url 'doc' %}";
+        });
+      });
+
+      function scrollToBottom() {
+        debugger;
+        console.log('scrollToBottom function called');
+        var container = document.getElementById('query-history-container');
+        if (container != null){
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+
+      // Call scrollToBottom() after the page is loaded
+      window.onload = function () {
+        scrollToBottom();
+      };
+</script>
+
+</body>
+</html>
