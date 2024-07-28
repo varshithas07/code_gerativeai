@@ -1,0 +1,12 @@
+1
+00:00:00,000 --> 00:00:02,000
+Thank you for being here. Good afternoon.
+
+2
+00:00:02,000 --> 00:00:04,000
+We are in a different class.
+
+3
+00:00:04,000 --> 00:00:06,000
+The class is at level 3-0-0.
+
